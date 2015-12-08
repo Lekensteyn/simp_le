@@ -78,6 +78,15 @@ class TestCase(unittest.TestCase):
     """simp_le unit test case."""
 
 
+def open_sensitive(filename, mode):
+    """Opens a sensitive file for writing."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    # Windows-only
+    if 'b' in mode and hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY  # pylint: disable=no-member
+    return os.fdopen(os.open(filename, flags, 0o600), mode)
+
+
 def gen_pkey(bits):
     """Generate a private key.
 
@@ -330,11 +339,13 @@ class FileIOPlugin(IOPlugin):
         """
         raise NotImplementedError()
 
-    def save_to_file(self, data):
+    def save_to_file(self, data, sensitive=False):
         """Save data to file."""
-        logger.info('Saving %s', self.path)
+        logger.info('Saving %s (%ssensitive)', self.path,
+                    '' if sensitive else 'not ')
+        open_func = open_sensitive if sensitive else open
         try:
-            with open(self.path, self.WRITE_MODE) as persist_file:
+            with open_func(self.path, self.WRITE_MODE) as persist_file:
                 persist_file.write(data)
         except OSError as error:
             logging.exception(error)
@@ -371,7 +382,8 @@ class AccountKey(FileIOPlugin, JWKIOPlugin):
                          cert=None, chain=None)
 
     def save(self, data):
-        return self.save_to_file(self.dump_jwk(data.account_key))
+        return self.save_to_file(self.dump_jwk(data.account_key),
+                                 sensitive=True)
 
 
 class OpenSSLIOPlugin(IOPlugin):  # pylint: disable=abstract-method
@@ -556,7 +568,7 @@ class KeyFile(FileIOPlugin, OpenSSLIOPlugin):
                          cert=None, chain=None)
 
     def save(self, data):
-        return self.save_to_file(self.dump_key(data.key))
+        return self.save_to_file(self.dump_key(data.key), sensitive=True)
 
 
 @IOPlugin.register(path='cert.der', typ=OpenSSL.crypto.FILETYPE_ASN1)
