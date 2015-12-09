@@ -71,6 +71,21 @@ Installation
     ./venv.sh
     . venv/bin/activate
 
+File permissions
+----------------
+Newly created key files are only accessible by ``simp_le`` user (mode
+600) while certificates are restricted by the umask setting.
+
+Should you need more relaxed permissions, either create an empty file
+first or modify the permission afterwards. ``simp_le`` will not modify
+permissions for existing files. Servers like Apache and nginx typically
+start as root and as such they do not need such a workaround.
+
+It is recommended to run ``simp_le`` as a different unprivileged user,
+dedicated for certificate management. Only this user will then be able
+to read the account and private key. Certificates are public
+information, so these can be world-readable.
+
 Help
 ----
 
