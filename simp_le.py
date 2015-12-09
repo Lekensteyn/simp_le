@@ -342,6 +342,10 @@ class FileIOPlugin(IOPlugin):
                 # previously
                 return self.EMPTY_DATA
             raise
+        if not content:
+            # Empty files may exist when their parent directory is not
+            # writable, or when the file mode needs to be overridden.
+            return self.EMPTY_DATA
         return self.load_from_content(content)
 
     @abc.abstractmethod
