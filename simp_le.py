@@ -21,6 +21,7 @@
 import abc
 import argparse
 import collections
+import contextlib
 import datetime
 import doctest
 import hashlib
@@ -28,8 +29,11 @@ import errno
 import logging
 import os
 import shlex
+import shutil
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 import unittest
@@ -76,6 +80,16 @@ class Error(Exception):
 
 class TestCase(unittest.TestCase):
     """simp_le unit test case."""
+
+
+@contextlib.contextmanager
+def temp_umask(umask):
+    """Context manager that temporarily sets the process umask."""
+    oldmask = os.umask(umask)
+    try:
+        yield
+    finally:
+        os.umask(oldmask)
 
 
 def open_sensitive(filename, mode):
@@ -1188,6 +1202,27 @@ class MainIntegrationTests(TestCase):
                 # assertRaises in 2.6 is not context manager, we need
                 # a way to check that this code path is not reachable
                 assert False
+
+
+class KeyFileTest(TestCase):
+    """Integration tests for plugin interface."""
+
+    # this is unittest suite | pylint: disable=missing-docstring
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.key_path = os.path.join(self.root, 'key.pem')
+        self.key_data = IOPlugin.Data(key=ComparablePKey(gen_pkey(1024)))
+
+    def tearDown(self):
+        shutil.rmtree(self.root)
+
+    def test_keyfile(self):
+        """Test whether newly saved key files are not world-readable."""
+        keyfile = KeyFile(path=self.key_path)
+        with temp_umask(0o022):
+            keyfile.save(self.key_data)
+        self.assertEqual(os.stat(self.key_path).st_mode & stat.S_IROTH, 0)
 
 
 if __name__ == '__main__':
