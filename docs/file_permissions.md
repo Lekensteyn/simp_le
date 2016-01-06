@@ -24,10 +24,14 @@ The external plugin (`external.sh`) is a blackbox to simp\_le and and storage
 issues are a concern for the external script. Therefore it is not covered
 further in this document.
 
+Only the file mode is controlled, not the file owner or group. If simp\_le were
+to change the latter two attributes, it would require more privileges (which
+should be discouraged).
+
 ## Design
-To keep things simple, the client controls only the file mode and not the file
-group nor use ACLs. If that functionality is desired, an external interface
-(`external.sh` or a wrapper script) can be used.
+To keep things simple, the client controls only the file mode and not ACLs. If
+that functionality is desired, an external interface (`external.sh` or a wrapper
+script) can be used.
 
 The umask setting can also be used to control the file mode, but that also
 affects certificate files and the Simple HTTP validation method and is
