@@ -273,8 +273,13 @@ class IOPlugin(object):
     - for `cert`: certificate, an instance of `OpenSSL.crypto.X509`
     - for `chain`: certificate chain, a list of `OpenSSL.crypto.X509` instances
     """
+    Data.__new__.__defaults__ = (None,) * len(Data._fields)
 
-    EMPTY_DATA = Data(account_key=None, key=None, cert=None, chain=None)
+    PersistedData = collections.namedtuple(Data.__name__, Data._fields)
+    """Like Data, but defaults to boolean False (for persisted())."""
+    PersistedData.__new__.__defaults__ = (False,) * len(Data._fields)
+
+    EMPTY_DATA = Data()
 
     def __init__(self, path, **dummy_kwargs):
         self.path = path
@@ -394,11 +399,10 @@ class AccountKey(FileIOPlugin, JWKIOPlugin):
     WRITE_MODE = 'w'
 
     def persisted(self):
-        return self.Data(account_key=True, key=False, cert=False, chain=False)
+        return self.PersistedData(account_key=True)
 
     def load_from_content(self, content):
-        return self.Data(account_key=self.load_jwk(content), key=None,
-                         cert=None, chain=None)
+        return self.Data(account_key=self.load_jwk(content))
 
     def save(self, data):
         return self.save_to_file(self.dump_jwk(data.account_key))
@@ -579,7 +583,7 @@ class PluginIOTestMixin(object):
                 jose.ComparableX509(crypto_util.gen_ss_cert(raw_key, ['c'])),
             ],
         )
-        self.key_data = IOPlugin.EMPTY_DATA._replace(key=self.all_data.key)
+        self.key_data = IOPlugin.Data(key=self.all_data.key)
 
     def setUp(self):  # pylint: disable=invalid-name
         self.root = tempfile.mkdtemp()
@@ -658,12 +662,12 @@ class ChainFile(FileIOPlugin, OpenSSLIOPlugin):
     """Certificate chain plugin."""
 
     def persisted(self):
-        return self.Data(account_key=False, key=False, cert=False, chain=True)
+        return self.PersistedData(chain=True)
 
     def load_from_content(self, output):
         chain = [self.load_cert(cert_data)
                  for cert_data in split_pems(output)]
-        return self.Data(account_key=None, key=None, cert=None, chain=chain)
+        return self.Data(chain=chain)
 
     def save(self, data):
         return self.save_to_file(_PEMS_SEP.join(
@@ -681,7 +685,7 @@ class FullChainFile(ChainFile):
     """Full chain file plugin."""
 
     def persisted(self):
-        return self.Data(account_key=False, key=False, cert=True, chain=True)
+        return self.PersistedData(cert=True, chain=True)
 
     def load(self):
         data = super(FullChainFile, self).load()
@@ -689,13 +693,11 @@ class FullChainFile(ChainFile):
             cert, chain = None, None
         else:
             cert, chain = data.chain[0], data.chain[1:]
-        return self.Data(account_key=data.account_key, key=data.key,
-                         cert=cert, chain=chain)
+        return self.Data(cert=cert, chain=chain)
 
     def save(self, data):
         return super(FullChainFile, self).save(self.Data(
-            account_key=data.account_key, key=data.key,
-            cert=None, chain=([data.cert] + data.chain)))
+            chain=([data.cert] + data.chain)))
 
 
 class FullChainFileTest(FileIOPluginTestMixin, UnitTestCase):
@@ -710,11 +712,10 @@ class KeyFile(FileIOPlugin, OpenSSLIOPlugin):
     """Private key file plugin."""
 
     def persisted(self):
-        return self.Data(account_key=False, key=True, cert=False, chain=False)
+        return self.Data(key=True)
 
     def load_from_content(self, output):
-        return self.Data(account_key=None, key=self.load_key(output),
-                         cert=None, chain=None)
+        return self.Data(key=self.load_key(output))
 
     def save(self, data):
         return self.save_to_file(self.dump_key(data.key))
@@ -732,11 +733,10 @@ class CertFile(FileIOPlugin, OpenSSLIOPlugin):
     """Certificate file plugin."""
 
     def persisted(self):
-        return self.Data(account_key=False, key=False, cert=True, chain=False)
+        return self.PersistedData(cert=True)
 
     def load_from_content(self, output):
-        return self.Data(account_key=None, key=None,
-                         cert=self.load_cert(output), chain=None)
+        return self.Data(cert=self.load_cert(output))
 
     def save(self, data):
         return self.save_to_file(self.dump_cert(data.cert))
@@ -753,12 +753,11 @@ class FullFile(FileIOPlugin, OpenSSLIOPlugin):
     """Private key, certificate and chain plugin."""
 
     def persisted(self):
-        return self.Data(account_key=False, key=True, cert=True, chain=True)
+        return self.PersistedData(key=True, cert=True, chain=True)
 
     def load_from_content(self, content):
         pems = split_pems(content)
         return self.Data(
-            account_key=None,
             key=self.load_key(next(pems)),
             cert=self.load_cert(next(pems)),
             chain=[self.load_cert(cert) for cert in pems],
@@ -1077,8 +1076,7 @@ def integration_test(args):
 
 def check_plugins_persist_all(ioplugins):
     """Do plugins cover all components (key/cert/chain)?"""
-    persisted = IOPlugin.Data(
-        account_key=False, key=False, cert=False, chain=False)
+    persisted = IOPlugin.PersistedData()
     for plugin_name in ioplugins:
         persisted = IOPlugin.Data(*componentwise_or(
             persisted, IOPlugin.registered[plugin_name].persisted()))
