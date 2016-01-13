@@ -1501,7 +1501,7 @@ class IntegrationTests(unittest.TestCase):
 
     @classmethod
     def get_stats(cls, *paths):
-        return dict((path, os.stat(path)) for path in paths)
+        return dict((path, os.stat(path).st_mtime) for path in paths)
 
     def test_it(self):
         webroot = os.path.join(os.getcwd(), 'public_html')
@@ -1511,11 +1511,14 @@ class IntegrationTests(unittest.TestCase):
         files = ('account_key.json', 'key.pem', 'full.pem')
         with self._new_swd():
             self.assertEqual(EXIT_RENEWAL, self._run(args))
+            # Set time to the past to ensure that changes are detected.
+            # NB os.utime() would fail if file didn't exist
+            for path in files:
+                os.utime(path, (0, 0))
             initial_stats = self.get_stats(*files)
 
             self.assertEqual(EXIT_NO_RENEWAL, self._run(args))
             # No renewal => no files should be touched
-            # NB get_stats() would fail if file didn't exist
             self.assertEqual(initial_stats, self.get_stats(*files))
 
             self.assertEqual(EXIT_REVOKE_OK, self._run(
