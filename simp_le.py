@@ -395,6 +395,13 @@ class FileIOPlugin(IOPlugin):
 
     def save_to_file(self, data):
         """Save data to file."""
+        try:
+            if self._read_file() == data:
+                logger.info('%s is unchanged')
+                return
+        except IOError as error:
+            logging.warning('Unable to read file before write: %s', e)
+
         logger.info('Saving %s', self.path)
         try:
             with open(self.path, self.WRITE_MODE) as persist_file:
