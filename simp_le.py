@@ -369,15 +369,9 @@ class FileIOPlugin(IOPlugin):
 
     def load(self):
         logger.debug('Loading %s', self.path)
-        try:
-            with open(self.path, self.READ_MODE) as persist_file:
-                content = persist_file.read()
-        except IOError as error:
-            if error.errno == errno.ENOENT:
-                # file does not exist, so it was not persisted
-                # previously
-                return self.EMPTY_DATA
-            raise
+        content = self._read_file()
+        if not content:
+            return self.EMPTY_DATA
         return self.load_from_content(content)
 
     @abc.abstractmethod
@@ -389,6 +383,15 @@ class FileIOPlugin(IOPlugin):
         whatever `IOPlugin.load` is meant to return.
         """
         raise NotImplementedError()
+
+    def _read_file(self):
+        try:
+            with open(self.path, self.READ_MODE) as persist_file:
+                return persist_file.read()
+        except IOError as error:
+            # Assume no data if file does not exist. Otherwise fail.
+            if error.errno != errno.ENOENT:
+                raise
 
     def save_to_file(self, data):
         """Save data to file."""
